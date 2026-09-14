@@ -1,4 +1,4 @@
-# DesignForge-AI - Embroidery Marketplace 🚀
+# LukArt - Embroidery Marketplace 🚀
 
 ![DesignForge-AI Logo](https://img.shields.io/badge/DesignForge-AI-blue.svg)
 ![Frontend](https://img.shields.io/badge/Frontend-Next.js-black?logo=next.js)
