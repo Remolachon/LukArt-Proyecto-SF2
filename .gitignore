@@ -8,6 +8,11 @@ build/
 
 .vite/
 
+.env
 
 __pycache__/
 *.pyc
+
+backend/venv/
+
+venv/
