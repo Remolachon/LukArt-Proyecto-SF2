@@ -1,22 +1,52 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Upload, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type Props = {
   uploadedImage: string | null;
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  setUploadedImage: (img: string | null) => void;
 };
 
 export default function Step2Upload({
   uploadedImage,
   handleFileUpload,
+  setUploadedImage,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false); // ✅ NUEVO
 
   const openFilePicker = () => {
     inputRef.current?.click();
+  };
+
+  // ✅ DRAG EVENTS
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+
+    // 🔥 ADAPTADOR → simulamos evento
+    const fakeEvent = {
+      target: {
+        files: [file],
+      },
+    } as unknown as React.ChangeEvent<HTMLInputElement>;
+
+    handleFileUpload(fakeEvent);
   };
 
   return (
@@ -26,7 +56,14 @@ export default function Step2Upload({
         Arrastra o selecciona tu archivo (.png, .jpg, .svg max 10 MB)
       </p>
 
-      <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+      <div
+        className={`border-2 border-dashed rounded-lg p-8 text-center transition
+          ${isDragging ? "border-accent bg-accent/10" : "border-border"}
+        `}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         {uploadedImage ? (
           <div>
             <img
@@ -35,13 +72,23 @@ export default function Step2Upload({
               className="max-w-full max-h-64 mx-auto rounded-lg mb-4"
             />
 
-            <button
-              type="button"
-              onClick={openFilePicker}
-              className="text-accent hover:underline"
-            >
-              Cambiar imagen
-            </button>
+            <div className="flex justify-center gap-6">
+              <button
+                type="button"
+                onClick={openFilePicker}
+                className="text-accent hover:underline"
+              >
+                Cambiar imagen
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setUploadedImage(null)}
+                className="text-red-500 hover:underline"
+              >
+                Quitar imagen
+              </button>
+            </div>
 
             <input
               ref={inputRef}
@@ -55,7 +102,10 @@ export default function Step2Upload({
           <div onClick={openFilePicker} className="cursor-pointer">
             <ImageIcon className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
 
-            <p className="text-lg mb-2">Arrastra tu archivo aquí</p>
+            <p className="text-lg mb-2">
+              {isDragging ? "Suelta tu archivo aquí" : "Arrastra tu archivo aquí"}
+            </p>
+
             <p className="text-sm text-muted-foreground mb-4">o</p>
 
             <Button type="button">

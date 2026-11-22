@@ -1,7 +1,7 @@
 export type OrderStatus =
   | 'En diseño'
   | 'En producción'
-  | 'Listo para entrega'
+  | 'Listo para entregar'
   | 'Entregado';
 
 export type ProductType = 'bordado' | 'neon-flex' | 'acrilico';
@@ -12,7 +12,11 @@ export interface AdminOrder {
   description?: string;
   status: OrderStatus;
   price: number;
-  imageUrl: string;
+  imageUrl?: string;
+  image: {
+    bucket: string;
+    path: string;
+  };
   clientName: string;
   productType: ProductType;
   createdAt: string;
@@ -33,7 +37,10 @@ export const mockOrdersAdmin: AdminOrder[] = [
     description: 'Nombre en neon azul para local comercial',
     status: 'En diseño',
     price: 120000,
-    imageUrl: IMG_NEON,
+        image: {
+      bucket: 'product-catalog',
+      path: 'mock/neon.jpg',
+    },
     clientName: 'María García',
     productType: 'neon-flex',
     createdAt: '2025-03-01',
@@ -45,7 +52,10 @@ export const mockOrdersAdmin: AdminOrder[] = [
     description: 'Logo corporativo con corte láser',
     status: 'En producción',
     price: 85000,
-    imageUrl: IMG_ACRILICO,
+    image: {
+      bucket: 'product-catalog',
+      path: 'mock/neon.jpg',
+    },
     clientName: 'Carlos López',
     productType: 'acrilico',
     createdAt: '2025-03-02',
@@ -55,9 +65,12 @@ export const mockOrdersAdmin: AdminOrder[] = [
     id: '003',
     title: 'Bordado Corporativo',
     description: 'Uniformes con logo bordado x10 unidades',
-    status: 'Listo para entrega',
+    status: 'Listo para entregar',
     price: 60000,
-    imageUrl: IMG_BORDADO,
+        image: {
+      bucket: 'product-catalog',
+      path: 'mock/neon.jpg',
+    },
     clientName: 'Ana Martínez',
     productType: 'bordado',
     createdAt: '2025-02-28',
@@ -69,7 +82,10 @@ export const mockOrdersAdmin: AdminOrder[] = [
     description: 'Placa de identificación de área',
     status: 'En producción',
     price: 45000,
-    imageUrl: IMG_ACRILICO,
+        image: {
+      bucket: 'product-catalog',
+      path: 'mock/neon.jpg',
+    },
     clientName: 'Pedro Ramírez',
     productType: 'acrilico',
     createdAt: '2025-03-03',
@@ -81,7 +97,10 @@ export const mockOrdersAdmin: AdminOrder[] = [
     description: 'Letrero decorativo para bar temático',
     status: 'Entregado',
     price: 200000,
-    imageUrl: IMG_NEON,
+        image: {
+      bucket: 'product-catalog',
+      path: 'mock/neon.jpg',
+    },
     clientName: 'Laura Torres',
     productType: 'neon-flex',
     createdAt: '2025-02-20',
@@ -93,6 +112,10 @@ export const mockOrdersAdmin: AdminOrder[] = [
     description: 'Gorras con logo del equipo deportivo',
     status: 'En diseño',
     price: 35000,
+    image: {
+      bucket: 'product-catalog',
+      path: 'mock/neon.jpg',
+    },
     imageUrl: IMG_BORDADO,
     clientName: 'Diego Sánchez',
     productType: 'bordado',
