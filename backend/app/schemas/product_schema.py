@@ -1,24 +1,62 @@
 from pydantic import BaseModel
 
+
+class ProductShapeResponse(BaseModel):
+    id: int
+    name: str
+
+
+class FileAssetResponse(BaseModel):
+    id: int
+    storage_path: str
+    media_kind: str | None = None
+    media_role: str | None = None
+    sort_order: int | None = None
+    file_type: str | None = None
+    mime_type: str | None = None
+    size_bytes: int | None = None
+    width: int | None = None
+    height: int | None = None
+    duration_seconds: int | None = None
+    extension: str | None = None
+
+
+class ProductAttributeSchema(BaseModel):
+    id: int
+    code: str
+    label: str
+    input_type: str
+    required: bool
+    placeholder: str | None = None
+    default_value: str | None = None
+    sort_order: int
+
 class ProductResponse(BaseModel):
     id: int
     title: str
     description: str
     imageUrl: str | None
+    media: list[FileAssetResponse] = []
     price: float
     rating: float
     reviews: int
     inStock: bool
+    stock: int
     productType: str
+    attributes: list[ProductAttributeSchema] = []
 
 
 class AdminProductResponse(BaseModel):
     id: int
+    companyId: int | None = None
     name: str
     description: str
     basePrice: float
     productType: str
+    productShape: str | None = None
+    productShapeId: int | None = None
     imageUrl: str | None
+    media: list[FileAssetResponse] = []
     inStock: bool
     stock: int
     isActive: bool
@@ -26,6 +64,7 @@ class AdminProductResponse(BaseModel):
     rating: float
     reviews: int
     createdAt: str
+    attributes: list[ProductAttributeSchema] = []
 
 
 class AdminProductUpsertRequest(BaseModel):
@@ -33,7 +72,9 @@ class AdminProductUpsertRequest(BaseModel):
     description: str
     basePrice: float
     productType: str
+    productShape: str | None = None
     stock: int
+    shapeAttributes: dict[str, str] = {}
     imageStoragePath: str | None = None
 
 

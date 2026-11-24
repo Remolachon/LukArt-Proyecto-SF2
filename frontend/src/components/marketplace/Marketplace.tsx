@@ -10,19 +10,22 @@ import { BuyOrderModal } from './modals/BuyOrderModal';
 import { ConfirmBuyModal } from './modals/ConfirmBuyModal';
 import { useMarketplaceBuy } from './hooks/useMarketplaceBuy';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { ProductReviewsModal } from './modals/ProductReviewsModal';
 
 export const Marketplace = () => {
   const { products } = useProducts();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { formData, errors, loading, setField, createOrder, resetForm, validateForm } =
+  const { attrValues, errors, loading, quantity, setQuantity, initAttributes, setField, createOrder, resetForm, validateForm } =
     useMarketplaceBuy();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<ProductType | 'all'>('all');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedReviewsProduct, setSelectedReviewsProduct] = useState<Product | null>(null);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [hasToken, setHasToken] = useState(false);
 
   useEffect(() => {
     const typeParam = searchParams.get('type');
@@ -30,6 +33,10 @@ export const Marketplace = () => {
       setFilterType(typeParam as ProductType);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    setHasToken(Boolean(localStorage.getItem('token')));
+  }, []);
 
   const filtered = products.filter((p) => {
     const matchesSearch =
@@ -51,12 +58,19 @@ export const Marketplace = () => {
       return;
     }
 
+    resetForm();
     setSelectedProduct(product);
+    setQuantity(1);
     setShowBuyModal(true);
   };
 
+  const handleViewReviews = (product: Product) => {
+    setSelectedReviewsProduct(product);
+  };
+
   const handleBuyConfirm = () => {
-    const isValid = validateForm();
+    if (!selectedProduct) return;
+    const isValid = validateForm(selectedProduct.attributes, selectedProduct.stock);
     if (!isValid) return;
 
     setShowBuyModal(false);
@@ -69,7 +83,9 @@ export const Marketplace = () => {
 
     const success = await createOrder(
       selectedProduct.id,
-      selectedProduct.title
+      selectedProduct.title,
+      selectedProduct.attributes,
+      selectedProduct.stock
     );
 
     if (success) {
@@ -104,9 +120,9 @@ export const Marketplace = () => {
         setFilterType={setFilterType}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.map((p) => (
-          <ProductCard key={p.id} product={p} onBuy={() => handleBuy(p)} />
+          <ProductCard key={p.id} product={p} onBuy={() => handleBuy(p)} onViewReviews={() => handleViewReviews(p)} />
         ))}
       </div>
 
@@ -119,14 +135,17 @@ export const Marketplace = () => {
       {/* Modal de parámetros */}
       {selectedProduct && (
         <BuyOrderModal
-          productTitle={selectedProduct.title}
+          product={selectedProduct}
           isOpen={showBuyModal}
           onClose={handleCloseBuyModal}
-          formData={formData}
+          attrValues={attrValues}
           errors={errors}
           loading={loading}
+          quantity={quantity}
+          onQuantityChange={setQuantity}
           onFieldChange={setField}
           onConfirm={handleBuyConfirm}
+          initAttributes={initAttributes}
         />
       )}
 
@@ -134,10 +153,28 @@ export const Marketplace = () => {
       {selectedProduct && (
         <ConfirmBuyModal
           productTitle={selectedProduct.title}
+          quantity={quantity}
+          totalAmount={(Number(selectedProduct.price || 0) * quantity) + Math.round(Number(selectedProduct.price || 0) * quantity * 0.19)}
           isOpen={showConfirmModal}
           onConfirm={handleFinalConfirm}
           onCancel={handleCloseConfirmModal}
           loading={loading}
+        />
+      )}
+
+      {selectedReviewsProduct && (
+        <ProductReviewsModal
+          open={Boolean(selectedReviewsProduct)}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) {
+              setSelectedReviewsProduct(null);
+            }
+          }}
+          productId={selectedReviewsProduct.id}
+          productTitle={selectedReviewsProduct.title}
+          summaryRating={selectedReviewsProduct.rating}
+          summaryReviews={selectedReviewsProduct.reviews}
+          allowReview={hasToken}
         />
       )}
     </div>

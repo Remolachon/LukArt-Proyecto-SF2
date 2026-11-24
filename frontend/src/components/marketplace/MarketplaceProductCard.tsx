@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import { Star, Eye, EyeOff, Pencil, Trash2 } from 'lucide-react';
+import { Star, Eye, EyeOff, Pencil, Trash2, MessageSquareText } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { TypeBadge } from '@/components/marketplace/TypeBadge';
 import { type MarketplaceProduct } from '@/types/marketplace';
@@ -8,41 +8,64 @@ interface MarketplaceProductCardProps {
     onToggleActive: (productId: string) => void;
     onEdit: (product: MarketplaceProduct) => void;
     onDelete: (product: MarketplaceProduct) => void;
+    onViewReviews?: (product: MarketplaceProduct) => void;
+    showEditAction?: boolean;
+    imageLoading?: 'eager' | 'lazy';
 }
 export function MarketplaceProductCard({
     product,
     onToggleActive,
     onEdit,
     onDelete,
+    onViewReviews,
+    showEditAction = true,
+    imageLoading = 'lazy',
 }: MarketplaceProductCardProps) {
+    const mainMedia = product.media?.find(m => m.media_role === 'main') || product.media?.[0];
+    const displayUrl = mainMedia?.storage_path || product.imageUrl;
+
     return (
         <Card
-            className={`overflow-hidden transition-all ${!product.isActive ? 'opacity-60' : ''
+            className={`overflow-hidden transition-all ${!product.isPublic ? 'opacity-60' : ''
                 }`}
         >
-            {/* Imagen */}
+            {/* Imagen / Video Principal */}
             <div className="relative aspect-video">
-                {product.imageUrl ? (
-                    <Image
-                        src={product.imageUrl}
-                        alt={product.name}
-                        fill
-                        sizes="(max-width: 1024px) 100vw, 33vw"
-                        unoptimized
-                        className="object-cover"
-                    />
+                {displayUrl ? (
+                    mainMedia?.media_kind === 'video' ? (
+                        <video
+                            src={displayUrl}
+                            className="w-full h-full object-cover"
+                            autoPlay
+                            muted
+                            loop
+                            playsInline
+                        />
+                    ) : (
+                        <Image
+                            src={displayUrl}
+                            alt={product.name}
+                            fill
+                            sizes="(max-width: 1024px) 100vw, 33vw"
+                            unoptimized
+                            loading={imageLoading}
+                            className="object-cover"
+                        />
+                    )
                 ) : (
-                    <div className="w-full h-full bg-gray-100" />
+                    <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                        <span className="text-sm text-muted-foreground">Sin imagen</span>
+                    </div>
                 )}
                 {/* Overlay de estado */}
-                {!product.isActive && (
+                {!product.isPublic && (
                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                         <span className="text-white text-sm font-semibold bg-black/60 px-3 py-1 rounded-full">
                             Inactivo
                         </span>
                     </div>
                 )}
-                {!product.inStock && product.isActive && (
+                {!product.inStock && product.isPublic && (
                     <div className="absolute top-2 right-2">
                         <span className="bg-red-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
                             Sin stock
@@ -57,7 +80,7 @@ export function MarketplaceProductCard({
                     {product.reviews > 0 && (
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
-                            <span>{product.rating}</span>
+                            <span>{Number(product.rating).toFixed(1)}</span>
                             <span>({product.reviews})</span>
                         </div>
                     )}
@@ -82,19 +105,27 @@ export function MarketplaceProductCard({
                 </div>
                 {/* Acciones */}
                 <div className="flex gap-2 pt-1">
+                    <button
+                        onClick={() => onViewReviews?.(product)}
+                        title="Ver comentarios"
+                        className="px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-medium transition-colors flex items-center gap-1"
+                    >
+                        <MessageSquareText className="w-3.5 h-3.5" />
+                        Comentarios
+                    </button>
                     {/* Activar / Desactivar */}
                     <button
                         onClick={() => onToggleActive(product.id)}
-                        title={product.isActive ? 'Desactivar' : 'Activar'}
+                        title={product.isPublic ? 'Desactivar' : 'Activar'}
                         className={`
               flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium
               border transition-colors
-              ${product.isActive
-                                ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                                : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'}
+              ${product.isPublic
+                                ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-900/40 dark:bg-amber-900/40 dark:text-amber-400 dark:hover:bg-amber-900/60'
+                                : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100 dark:border-green-900/40 dark:bg-green-900/40 dark:text-green-400 dark:hover:bg-green-900/60'}
             `}
                     >
-                        {product.isActive ? (
+                        {product.isPublic ? (
                             <>
                                 <EyeOff className="w-3.5 h-3.5" />
                                 Desactivar
@@ -106,22 +137,23 @@ export function MarketplaceProductCard({
                             </>
                         )}
                     </button>
-                    {/* Editar */}
-                    <button
-                        onClick={() => onEdit(product)}
-                        title="Editar producto"
-                        className="px-3 py-1.5 rounded-lg border border-border bg-white hover:bg-muted
+                    {showEditAction && (
+                        <button
+                            onClick={() => onEdit(product)}
+                            title="Editar producto"
+                            className="px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted
                        text-xs font-medium transition-colors flex items-center gap-1"
-                    >
-                        <Pencil className="w-3.5 h-3.5" />
-                        Editar
-                    </button>
+                        >
+                            <Pencil className="w-3.5 h-3.5" />
+                            Editar
+                        </button>
+                    )}
                     {/* Eliminar */}
                     <button
                         onClick={() => onDelete(product)}
                         title="Eliminar producto"
                         className="p-1.5 rounded-lg border border-red-100 bg-red-50 text-red-500
-                       hover:bg-red-100 transition-colors"
+                       hover:bg-red-100 transition-colors dark:border-red-900/40 dark:bg-red-900/40 dark:text-red-400 dark:hover:bg-red-900/60"
                     >
                         <Trash2 className="w-3.5 h-3.5" />
                     </button>

@@ -1,12 +1,35 @@
 import axios from "axios";
 import { supabaseClient } from "@/lib/supabase/supabaseClient";
 
-const API_URL = "http://localhost:8000/auth";
+const ENV_API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "");
+const DEFAULT_PROD_API_BASE_URL = "https://designforge-ai-proyecto-software-1.onrender.com";
+const API_BASE_URL =
+  ENV_API_BASE_URL ||
+  (typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:8000"
+    : DEFAULT_PROD_API_BASE_URL);
+const REQUEST_TIMEOUT_MS = 15000;
+
+const getAuthApiUrl = () => {
+  if (!API_BASE_URL) {
+    throw new Error("API_URL_NOT_CONFIGURED");
+  }
+
+  return `${API_BASE_URL}/auth`;
+};
 
 type GoogleAuthMode = "login" | "register";
 
 export const getDashboardByRole = (role: string | undefined) => {
   const normalizedRole = (role || "").toLowerCase().trim();
+
+  if (normalizedRole === "administrador") {
+    return "/administrador/dashboard";
+  }
+
+  if (normalizedRole === "funcionario_adm") {
+    return "/funcionario-adm/dashboard";
+  }
 
   if (normalizedRole === "funcionario") {
     return "/funcionario/dashboard";
@@ -38,6 +61,7 @@ export const startGoogleAuth = async (mode: GoogleAuthMode) => {
 };
 
 export const completeGoogleAuth = async (code?: string) => {
+  const apiUrl = getAuthApiUrl();
   let accessToken: string | undefined;
   const fragment = window.location.hash.substring(1);
 
@@ -99,9 +123,9 @@ export const completeGoogleAuth = async (code?: string) => {
   console.log("completeGoogleAuth: SUCCESS - token acquired, posting to backend");
 
   try {
-    console.log("completeGoogleAuth: posting access_token to backend", { api: `${API_URL}/google-oauth` });
+    console.log("completeGoogleAuth: posting access_token to backend", { api: `${apiUrl}/google-oauth` });
     const response = await axios.post(
-      `${API_URL}/google-oauth`,
+      `${apiUrl}/google-oauth`,
       {
         access_token: accessToken,
       },
@@ -123,14 +147,15 @@ export const completeGoogleAuth = async (code?: string) => {
 };
 
 export const login = async (email: string, password: string) => {
+  const apiUrl = getAuthApiUrl();
   const response = await axios.post(
-    `${API_URL}/login`,
+    `${apiUrl}/login`,
     {
       email,
       password,
     },
     {
-      timeout: 5000,
+      timeout: REQUEST_TIMEOUT_MS,
     }
   );
 
@@ -151,7 +176,9 @@ export const register = async (
   password: string,
   confirm_password: string
 ) => {
-  const res = await axios.post(`${API_URL}/register`, {
+  const apiUrl = getAuthApiUrl();
+
+  const res = await axios.post(`${apiUrl}/register`, {
     first_name,
     last_name,
     phone,
@@ -164,9 +191,11 @@ export const register = async (
 };
 
 export const logout = async () => {
+  const apiUrl = getAuthApiUrl();
+
   try {
     await axios.post(
-      `${API_URL}/logout`,
+      `${apiUrl}/logout`,
       {},
       {
         headers: {
@@ -181,4 +210,27 @@ export const logout = async () => {
   localStorage.removeItem("token");
   localStorage.removeItem("user_name");
   localStorage.removeItem("role");
+};
+
+/**
+ * Obtiene el rol actual del usuario desde el backend y lo sincroniza en localStorage.
+ * Útil cuando el rol cambia (creación de empresa, aprobación por admin) sin re-login.
+ */
+export const syncRoleFromBackend = async (): Promise<string | null> => {
+  const token = localStorage.getItem("token");
+  if (!token) return null;
+
+  try {
+    const response = await axios.get(`${API_BASE_URL}/users/me/role`, {
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: REQUEST_TIMEOUT_MS,
+    });
+    const { role } = response.data as { role: string; company_id: number | null };
+    if (role) {
+      localStorage.setItem("role", role);
+    }
+    return role ?? null;
+  } catch {
+    return null;
+  }
 };

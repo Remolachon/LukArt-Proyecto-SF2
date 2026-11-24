@@ -2,57 +2,61 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { paymentService } from '@/services/payment.service';
-
-export interface BuyFormData {
-  length: string;
-  height: string;
-  width: string;
-  material: string;
-}
-
-export interface BuyFormErrors extends BuyFormData {
-  [key: string]: string;
-}
+import { ProductAttribute } from '@/types/product';
+import { audioService } from '@/services/audio.service';
 
 export function useMarketplaceBuy() {
   const router = useRouter();
-  const [formData, setFormData] = useState<BuyFormData>({
-    length: '',
-    height: '',
-    width: '',
-    material: '',
-  });
-  const [errors, setErrors] = useState<Partial<BuyFormErrors>>({});
+  const [attrValues, setAttrValues] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [quantity, setQuantity] = useState(1);
 
-  const validateForm = (): boolean => {
-    const newErrors: Partial<BuyFormErrors> = {};
+  const initAttributes = (attributes: ProductAttribute[]) => {
+    setAttrValues((prev) => {
+      const next = { ...prev };
 
-    // Validar length
-    if (!formData.length.trim()) {
-      newErrors.length = 'La longitud es obligatoria.';
-    } else if (isNaN(Number(formData.length)) || Number(formData.length) <= 0) {
-      newErrors.length = 'La longitud debe ser un número mayor a 0.';
+      attributes.forEach((attribute) => {
+        if (next[attribute.code] && next[attribute.code].trim() !== '') {
+          return;
+        }
+
+        if (attribute.default_value && attribute.default_value.trim() !== '') {
+          next[attribute.code] = attribute.default_value.trim();
+          return;
+        }
+
+        if (attribute.input_type === 'color') {
+          next[attribute.code] = '#000000';
+          return;
+        }
+
+        next[attribute.code] = (attribute.placeholder || '').trim();
+      });
+
+      return next;
+    });
+  };
+
+  const validateForm = (attributes: ProductAttribute[], stock?: number): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10) {
+      newErrors.quantity = 'La cantidad debe estar entre 1 y 10.';
+    } else if (typeof stock === 'number' && quantity > stock) {
+      newErrors.quantity = 'La cantidad no puede superar el stock disponible.';
     }
 
-    // Validar height
-    if (!formData.height.trim()) {
-      newErrors.height = 'La altura es obligatoria.';
-    } else if (isNaN(Number(formData.height)) || Number(formData.height) <= 0) {
-      newErrors.height = 'La altura debe ser un número mayor a 0.';
-    }
-
-    // Validar width
-    if (!formData.width.trim()) {
-      newErrors.width = 'El ancho es obligatorio.';
-    } else if (isNaN(Number(formData.width)) || Number(formData.width) <= 0) {
-      newErrors.width = 'El ancho debe ser un número mayor a 0.';
-    }
-
-    // Validar material
-    if (!formData.material.trim()) {
-      newErrors.material = 'El material es obligatorio.';
-    }
+    attributes.forEach(attr => {
+      const val = attrValues[attr.code] || attr.default_value || '';
+      if (attr.required && (!val || val.trim() === '')) {
+        newErrors[attr.code] = `El campo ${attr.label} es obligatorio.`;
+      } else if (attr.input_type === 'number' && val) {
+        if (isNaN(Number(val)) || Number(val) <= 0) {
+          newErrors[attr.code] = `El campo ${attr.label} debe ser mayor a 0.`;
+        }
+      }
+    });
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -60,9 +64,11 @@ export function useMarketplaceBuy() {
 
   const createOrder = async (
     productId: number,
-    productTitle: string
+    productTitle: string,
+    attributes: ProductAttribute[],
+    stock?: number
   ): Promise<boolean> => {
-    if (!validateForm()) {
+    if (!validateForm(attributes, stock)) {
       return false;
     }
 
@@ -77,12 +83,19 @@ export function useMarketplaceBuy() {
         return false;
       }
 
+      // Format custom_attributes payload
+      const customAttributes: Record<string, string> = {};
+      attributes.forEach(attr => {
+        const value = (attrValues[attr.code] || attr.default_value || '').trim();
+        if (value !== '') {
+          customAttributes[attr.code] = value;
+        }
+      });
+
       const result = await paymentService.createMarketplaceOrder({
         product_id: productId,
-        length: Number(formData.length),
-        height: Number(formData.height),
-        width: Number(formData.width),
-        material: formData.material,
+        quantity,
+        attributes: customAttributes,
       });
 
       if (!result.payment_url) {
@@ -99,6 +112,7 @@ export function useMarketplaceBuy() {
         );
       }
 
+      audioService.playSuccessOrder();
       toast.success(`Pedido de "${productTitle}" creado. Continúa al checkout seguro.`);
       resetForm();
 
@@ -115,7 +129,15 @@ export function useMarketplaceBuy() {
         return false;
       }
 
-      toast.error(message);
+      // Log detailed error for debugging
+      console.error('Error creating marketplace order:', error);
+
+      // Show user-friendly error message
+      const userMessage = message.includes('body.')
+        ? `Datos inválidos: ${message.split('; ').join(', ')}`
+        : message;
+
+      toast.error(userMessage);
       return false;
     } finally {
       setLoading(false);
@@ -123,20 +145,19 @@ export function useMarketplaceBuy() {
   };
 
   const resetForm = () => {
-    setFormData({
-      length: '',
-      height: '',
-      width: '',
-      material: '',
-    });
+    setAttrValues({});
     setErrors({});
+    setQuantity(1);
   };
 
-  const setField = (field: keyof BuyFormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    // Limpiar error del campo cuando empieza a escribir
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: '' }));
+  const setField = (code: string, value: string) => {
+    setAttrValues((prev) => ({ ...prev, [code]: value }));
+    if (errors[code]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[code];
+        return next;
+      });
     }
   };
 
@@ -145,9 +166,12 @@ export function useMarketplaceBuy() {
   };
 
   return {
-    formData,
+    attrValues,
     errors,
     loading,
+    quantity,
+    setQuantity,
+    initAttributes,
     setField,
     validateForm,
     createOrder,

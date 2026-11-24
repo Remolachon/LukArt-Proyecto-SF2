@@ -14,8 +14,12 @@ type DashboardOrder = {
     bucket: string;
     path: string;
   };
+  media?: OrderMedia[];
   clientName?: string | null;
+  companyName?: string | null;
   productType?: string | null;
+  quantity?: number | null;
+  attributes?: OrderAttribute[] | null;
 };
 
 type DashboardResponse = {
@@ -30,11 +34,10 @@ export type PaginatedOrders<T> = {
   totalPages: number;
 };
 
-export type OrderParameters = {
-  length: number;
-  height: number;
-  width: number;
-  material: string;
+export type OrderAttribute = {
+  code: string;
+  label: string;
+  value: string;
 };
 
 export type OrderDetail = {
@@ -49,10 +52,21 @@ export type OrderDetail = {
     bucket: string;
     path: string;
   };
+  media?: OrderMedia[];
   clientName?: string | null;
+  companyName?: string | null;
   productType?: string | null;
   quantity: number;
-  parameters: OrderParameters | null;
+  attributes: OrderAttribute[] | null;
+};
+
+export type OrderMedia = {
+  bucket: string;
+  path: string;
+  mediaKind?: string | null;
+  mediaRole?: string | null;
+  mimeType?: string | null;
+  sortOrder?: number | null;
 };
 
 function getAuthHeaders() {
@@ -76,11 +90,13 @@ function canonicalStatus(status: string): OrderStatus {
   return 'Entregado';
 }
 
-function normalizeProductType(value?: string | null): 'bordado' | 'neon-flex' | 'acrilico' {
+function normalizeProductType(value?: string | null): 'bordado' | 'neon-flex' | 'acrilico' | 'vinilo' | 'sublimacion' {
   const normalized = (value || '').trim().toLowerCase().replace('_', '-');
 
   if (normalized.includes('neon')) return 'neon-flex';
   if (normalized.includes('acril')) return 'acrilico';
+  if (normalized.includes('vinilo')) return 'vinilo';
+  if (normalized.includes('sublim')) return 'sublimacion';
   return 'bordado';
 }
 
@@ -94,8 +110,12 @@ function toAdminOrder(order: DashboardOrder): AdminOrder {
     createdAt: order.createdAt,
     image: order.image,
     imageUrl: order.imageUrl || undefined,
+    media: order.media || [],
     clientName: order.clientName || 'Cliente',
+    companyName: order.companyName || null,
     productType: normalizeProductType(order.productType),
+    quantity: order.quantity ?? 1,
+    attributes: order.attributes ?? undefined,
   };
 }
 

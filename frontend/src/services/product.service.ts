@@ -1,16 +1,21 @@
 import { Product } from "@/types/product";
-import { getCatalogImageByType, normalizeProductType } from "@/constants/productCatalog";
+import { normalizeProductType } from "@/constants/productCatalog";
 
 type ProductApiResponse = {
   id: number;
   title: string;
   description: string;
   imageUrl: string | null;
+  media?: any[];
   price: number;
   rating: number;
   reviews: number;
   inStock: boolean;
+  stock: number;
   productType: string;
+  productShape?: string | null;
+  productShapeId?: number | null;
+  attributes?: any[];
 };
 
 function toProduct(apiProduct: ProductApiResponse): Product {
@@ -20,12 +25,17 @@ function toProduct(apiProduct: ProductApiResponse): Product {
     id: apiProduct.id,
     title: apiProduct.title,
     description: apiProduct.description,
-    imageUrl: getCatalogImageByType(apiProduct.productType, apiProduct.imageUrl),
+    imageUrl: apiProduct.imageUrl || undefined,
+    media: apiProduct.media || [],
     price: Number(apiProduct.price),
     rating: Number(apiProduct.rating || 0),
     reviews: Number(apiProduct.reviews || 0),
     inStock: Boolean(apiProduct.inStock),
+    stock: Number(apiProduct.stock || 0),
     productType: normalizedType,
+    productShape: apiProduct.productShape || null,
+    productShapeId: apiProduct.productShapeId ?? null,
+    attributes: apiProduct.attributes || [],
   };
 }
 

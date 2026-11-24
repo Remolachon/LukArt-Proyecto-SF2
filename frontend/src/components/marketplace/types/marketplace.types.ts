@@ -6,10 +6,20 @@ export type ProductFormData = {
     description: string;
     basePrice: string;
     productType: ProductType;
+    productShape: string;
     stock: string;
 };
+export interface MediaUploadItem {
+    id: string;
+    file?: File; // Optional for existing media that was already uploaded
+    previewUrl: string;
+    media_kind: 'image' | 'video' | 'thumbnail' | 'document';
+    media_role: 'main' | 'gallery' | 'preview' | 'attachment';
+}
+
 export type ProductFormSubmit = ProductFormData & {
-    imageFile: File | null;
+    mediaItems: MediaUploadItem[];
+    shapeAttributes: Record<string, string>;
 };
 // ─── Constantes ───────────────────────────────────────────────────────────────
 export const EMPTY_FORM: ProductFormData = {
@@ -17,6 +27,7 @@ export const EMPTY_FORM: ProductFormData = {
     description: '',
     basePrice: '',
     productType: 'bordado',
+    productShape: '',
     stock: '',
 };
 export const PRODUCT_TYPES: ProductType[] = ['bordado', 'neon-flex', 'acrilico'];

@@ -1,25 +1,32 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { ProductType } from "@/types/types";
 
-type WizardStep = 1 | 2 | 3 | 4 | 5;
+type WizardStep = 1 | 2 | 3 | 4;
 
 interface State {
   currentStep: WizardStep;
   productType: ProductType | null;
+  quantity: number;
   uploadedImage: string | null; // 🔥 ahora será URL (no base64)
-  selectedVariant: number | null;
+  generatedImages: string[]; // URLs de imágenes generadas con IA
+  selectedGeneratedImage: string | null; // Imagen seleccionada
+  attributeValues: Record<string, string>; // Atributos dinámicos del producto
 }
 
 const STORAGE_KEY = "crear-pedido";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const initialState: State = {
   currentStep: 1,
   productType: null,
+  quantity: 1,
   uploadedImage: null,
-  selectedVariant: null,
+  generatedImages: [],
+  selectedGeneratedImage: null,
+  attributeValues: {},
 };
 
 export function useCrearPedido({
@@ -39,6 +46,7 @@ export function useCrearPedido({
       return {
         ...initialState,
         ...parsed,
+        quantity: parsed.quantity ?? 1,
       };
     } catch {
       return initialState;
@@ -46,6 +54,7 @@ export function useCrearPedido({
   });
 
   const [loading, setLoading] = useState(false);
+  const latestUploadedImageRef = useRef<string | null>(initialState.uploadedImage);
 
   useEffect(() => {
     if (!restoreDraft) {
@@ -54,8 +63,6 @@ export function useCrearPedido({
   }, [restoreDraft]);
 
   useEffect(() => {
-    console.log("uploadedImage:", state.uploadedImage); // 🔥 AQUÍ
-
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
 
@@ -64,25 +71,43 @@ export function useCrearPedido({
     setState((prev) => ({
       ...prev,
       productType: type,
+      quantity: 1,
       uploadedImage: null,
-      selectedVariant: null,
+      generatedImages: [],
+      selectedGeneratedImage: null,
+      attributeValues: {},
+    }));
+  };
+
+  const setQuantity = (quantity: number) => {
+    setState((prev) => ({
+      ...prev,
+      quantity: Math.min(10, Math.max(1, quantity)),
+    }));
+  };
+
+  const setAttributeValues = (values: Record<string, string>) => {
+    setState((prev) => ({
+      ...prev,
+      attributeValues: values,
     }));
   };
 
   // 🔹 SET IMAGE DIRECT (para quitar imagen)
   const setUploadedImage = (img: string | null) => {
+    latestUploadedImageRef.current = img;
     setState((prev) => ({
       ...prev,
       uploadedImage: img,
-      selectedVariant: null,
+      generatedImages: [],
+      selectedGeneratedImage: null,
     }));
   };
 
-  // 🔹 VARIANT
-  const setSelectedVariant = (variant: number) => {
+  const setSelectedGeneratedImage = (image: string | null) => {
     setState((prev) => ({
       ...prev,
-      selectedVariant: variant,
+      selectedGeneratedImage: image,
     }));
   };
 
@@ -105,7 +130,7 @@ export function useCrearPedido({
       formData.append("file", file);
 
       // 🔥 SIN TOKEN → subida pública o con service role backend
-      const res = await fetch("http://localhost:8000/upload-image", {
+      const res = await fetch(`${API_URL}/upload-image`, {
         method: "POST",
         body: formData,
       });
@@ -124,6 +149,7 @@ export function useCrearPedido({
       }
 
       setUploadedImage(imageUrl);
+      latestUploadedImageRef.current = imageUrl;
 
       toast.success("Imagen subida correctamente");
     } catch (error) {
@@ -133,10 +159,90 @@ export function useCrearPedido({
     }
   };
 
+  // 🔥 GENERAR IMÁGENES CON IA
+  const generateAIImages = useCallback(async (style: string, reset = false, sourceImageUrl?: string) => {
+    const referenceImageUrl = sourceImageUrl || latestUploadedImageRef.current || state.uploadedImage;
+
+    if (!referenceImageUrl) {
+      toast.error("Primero sube una imagen");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      if (reset) {
+        setState((prev) => ({
+          ...prev,
+          generatedImages: [],
+          selectedGeneratedImage: null,
+        }));
+      }
+
+      const response = await fetch(referenceImageUrl, {
+        mode: "cors",
+      });
+
+      if (!response.ok) {
+        throw new Error("No se pudo descargar la imagen subida");
+      }
+
+      const blob = await response.blob();
+      const file = new File([blob], "uploaded.png", {
+        type: response.type || "image/png",
+      });
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch(`${API_URL}/generate-preview?style=${encodeURIComponent(
+        style
+      )}`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || "Error generando imagen");
+      }
+
+      const data = await res.json();
+      const generatedUrl = data.preview_url;
+
+      setState((prev) => {
+        const nextImages = reset
+          ? [generatedUrl]
+          : [...prev.generatedImages, generatedUrl].slice(-3);
+
+        return {
+          ...prev,
+          generatedImages: nextImages,
+          selectedGeneratedImage: reset ? generatedUrl : prev.selectedGeneratedImage || generatedUrl,
+        };
+      });
+
+      toast.success("Imagen generada con IA");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error generando imagen";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }, [state.uploadedImage]);
+
+  const resetGeneratedImages = () => {
+    setState((prev) => ({
+      ...prev,
+      generatedImages: [],
+      selectedGeneratedImage: null,
+    }));
+  };
+
   const nextStep = () => {
     setState((prev) => {
       if (prev.currentStep === 3) {
-        return { ...prev, currentStep: 5 };
+        return { ...prev, currentStep: 4 };
       }
 
       return {
@@ -148,7 +254,7 @@ export function useCrearPedido({
 
   const prevStep = () => {
     setState((prev) => {
-      if (prev.currentStep === 5) {
+      if (prev.currentStep === 4) {
         return { ...prev, currentStep: 3 };
       }
 
@@ -166,7 +272,7 @@ export function useCrearPedido({
       case 2:
         return state.uploadedImage !== null;
       case 3:
-        return state.selectedVariant !== null;
+        return state.selectedGeneratedImage !== null;
       default:
         return true;
     }
@@ -181,13 +287,18 @@ export function useCrearPedido({
     ...state,
     loading,
     setProductType,
+    setQuantity,
     handleFileUpload,
     nextStep,
     prevStep,
     canProceed,
     reset,
     setLoading,
-    setSelectedVariant,
     setUploadedImage, // 🔥 EXPORTADO
+    generateAIImages,
+    resetGeneratedImages,
+
+    setSelectedGeneratedImage,
+    setAttributeValues,
   };
 }

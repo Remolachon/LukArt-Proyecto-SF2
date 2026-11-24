@@ -5,6 +5,9 @@ import "./globals.css";
 
 import { AuthProvider } from "@/context/AuthContext";
 import Footer from "@/components/Footer";
+import { ReviewModalHost } from "@/components/marketplace/modals/ReviewModalHost";
+import { Toaster } from "@/components/ui/sonner";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,19 +30,29 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white text-black`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
-        <AuthProvider>
-          <div className="flex flex-col min-h-screen">
-            {/* Contenido principal */}
-            <main className="flex-grow">{children}</main>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AuthProvider>
+            <div className="flex flex-col min-h-screen">
+              {/* Contenido principal */}
+              <main className="flex-grow">{children}</main>
 
-            {/* Footer en todas las páginas */}
-            <Footer />
-          </div>
-        </AuthProvider>
+              <ReviewModalHost />
+
+              {/* Footer en todas las páginas */}
+              <Footer />
+            </div>
+          </AuthProvider>
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

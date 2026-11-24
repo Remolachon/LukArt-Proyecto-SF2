@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Plus } from 'lucide-react';
 
 import Header from '@/components/Header';
@@ -13,8 +14,11 @@ import { MarketplaceProductCard } from '@/components/marketplace/MarketplaceProd
 import { ProductModal } from '@/components/marketplace/modals/ProductModal';
 import { DeleteModal } from '@/components/marketplace/modals/DeleteModal';
 import { ConfirmActionModal } from '@/components/marketplace/modals/ConfirmActionModal';
+import { ProductReviewsModal } from '@/components/marketplace/modals/ProductReviewsModal';
+import { type MarketplaceProduct } from '@/types/marketplace';
 
 export default function FuncionarioMarketplace() {
+  const [selectedReviewsProduct, setSelectedReviewsProduct] = useState<MarketplaceProduct | null>(null);
   const {
     filtered,
     products,
@@ -23,6 +27,7 @@ export default function FuncionarioMarketplace() {
     filterType,
     setFilterType,
     loading,
+    isProcessing,
     totalActive,
     totalInactive,
     outOfStock,
@@ -31,6 +36,8 @@ export default function FuncionarioMarketplace() {
     modalMode,
     editingProduct,
     editInitialData,
+    editInitialMediaItems,
+    editInitialShapeAttributes,
     openCreate,
     openEdit,
     handleSave,
@@ -98,14 +105,16 @@ export default function FuncionarioMarketplace() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filtered.map((product) => (
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((product, idx) => (
               <MarketplaceProductCard
                 key={product.id}
                 product={product}
                 onToggleActive={toggleActive}
                 onEdit={openEdit}
                 onDelete={setDeletingProduct}
+                onViewReviews={setSelectedReviewsProduct}
+                imageLoading={idx === 0 ? 'eager' : 'lazy'}
               />
             ))}
           </div>
@@ -128,7 +137,8 @@ export default function FuncionarioMarketplace() {
         <ProductModal
           mode={modalMode}
           initialData={editInitialData}
-          initialImageUrl={editingProduct?.imageUrl}
+          initialMediaItems={editInitialMediaItems}
+          initialShapeAttributes={editInitialShapeAttributes}
           onClose={() => setShowModal(false)}
           onSave={handleSave}
         />
@@ -145,20 +155,22 @@ export default function FuncionarioMarketplace() {
           confirmLabel={modalMode === 'create' ? 'Crear producto' : 'Guardar cambios'}
           onConfirm={confirmSave}
           onCancel={() => setPendingSave(null)}
+          loading={isProcessing}
         />
       )}
 
       {pendingVisibility && (
         <ConfirmActionModal
-          title={pendingVisibility.isActive ? 'Desactivar producto' : 'Activar producto'}
+          title={pendingVisibility.isPublic ? 'Desactivar producto' : 'Activar producto'}
           description={
-            pendingVisibility.isActive
+            pendingVisibility.isPublic
               ? `"${pendingVisibility.name}" dejará de mostrarse en el marketplace público.`
               : `"${pendingVisibility.name}" volverá a mostrarse en el marketplace público.`
           }
-          confirmLabel={pendingVisibility.isActive ? 'Desactivar' : 'Activar'}
+          confirmLabel={pendingVisibility.isPublic ? 'Desactivar' : 'Activar'}
           onConfirm={confirmToggleActive}
           onCancel={() => setPendingVisibility(null)}
+          loading={isProcessing}
         />
       )}
 
@@ -168,6 +180,23 @@ export default function FuncionarioMarketplace() {
           productName={deletingProduct.name}
           onConfirm={confirmDelete}
           onCancel={() => setDeletingProduct(null)}
+          loading={isProcessing}
+        />
+      )}
+
+      {selectedReviewsProduct && (
+        <ProductReviewsModal
+          open={Boolean(selectedReviewsProduct)}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) {
+              setSelectedReviewsProduct(null);
+            }
+          }}
+          productId={Number(selectedReviewsProduct.id)}
+          productTitle={selectedReviewsProduct.name}
+          summaryRating={selectedReviewsProduct.rating}
+          summaryReviews={selectedReviewsProduct.reviews}
+          allowReview={false}
         />
       )}
     </div>

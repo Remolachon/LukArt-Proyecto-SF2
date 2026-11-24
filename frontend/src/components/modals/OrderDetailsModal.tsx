@@ -7,7 +7,19 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { funcionarioOrderService, type OrderDetail } from '@/services/funcionario-order.service';
+import { ProductService } from '@/services/product.service';
 import { getImageUrl } from '@/lib/supabase/getImageUrl';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+
+type ResolvedMedia = {
+  bucket: string;
+  path: string;
+  mediaKind?: string | null;
+  mediaRole?: string | null;
+  mimeType?: string | null;
+  sortOrder?: number | null;
+  url: string | null;
+};
 
 interface OrderDetailsModalProps {
   orderId: string | number;
@@ -20,53 +32,123 @@ export function OrderDetailsModal({ orderId, isOpen, onClose }: OrderDetailsModa
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [resolvedImageUrl, setResolvedImageUrl] = useState<string | null>(null);
+  const [resolvedMedia, setResolvedMedia] = useState<ResolvedMedia[]>([]);
+  const [fallbackMedia, setFallbackMedia] = useState<ResolvedMedia[]>([]);
+  const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
 
   useEffect(() => {
     if (!isOpen) return;
 
-    setLoading(true);
-    setError(null);
-    setResolvedImageUrl(null);
+    let cancelled = false;
 
-    funcionarioOrderService
-      .getOrderDetail(orderId)
-      .then((data) => {
-        setOrder(data);
-      })
-      .catch((err) => {
-        setError(err?.message || 'Error al cargar los detalles');
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    const loadOrder = async () => {
+      setLoading(true);
+      setError(null);
+      setResolvedImageUrl(null);
+      setResolvedMedia([]);
+      setFallbackMedia([]);
+
+      try {
+        const data = await funcionarioOrderService.getOrderDetail(orderId);
+
+        if (!cancelled) {
+          setOrder(data);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError((err as { message?: string })?.message || 'Error al cargar los detalles');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadOrder();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen, orderId]);
 
   useEffect(() => {
     if (!order || !isOpen) return;
 
-    if (order.imageUrl) {
-      setResolvedImageUrl(order.imageUrl);
-      return;
-    }
-
-    if (!order.image?.bucket || !order.image?.path) {
-      setResolvedImageUrl(null);
-      return;
-    }
-
     let cancelled = false;
-    getImageUrl(order.image.bucket, order.image.path)
-      .then((url) => {
-        if (!cancelled) setResolvedImageUrl(url || null);
-      })
-      .catch(() => {
-        if (!cancelled) setResolvedImageUrl(null);
-      });
+
+    const sourceMedia: ResolvedMedia[] =
+      order.media && order.media.length > 0
+        ? order.media.map((media) => ({ ...media, url: null }))
+        : order.image?.bucket && order.image?.path
+          ? [{ bucket: order.image.bucket, path: order.image.path, url: null }]
+          : [];
+
+    const loadFallbackMedia = async () => {
+      if (sourceMedia.length > 1 || !(order as any).productId) return;
+
+      try {
+        const product = await ProductService.getProductById(String((order as any).productId));
+        const productMedia = (product.media || []).map((media) => ({
+          bucket: media.bucket_name || 'product-catalog',
+          path: media.storage_path,
+          mediaKind: media.media_kind,
+          mediaRole: media.media_role,
+          mimeType: media.mime_type,
+          sortOrder: media.sort_order,
+          url: null,
+        }));
+
+        if (!cancelled && productMedia.length > 1) {
+          setFallbackMedia(productMedia);
+        }
+      } catch {
+        if (!cancelled) {
+          setFallbackMedia([]);
+        }
+      }
+    };
+
+    void loadFallbackMedia();
+
+    const resolveMedia = async () => {
+      if (order.imageUrl) {
+        setResolvedImageUrl(order.imageUrl);
+      } else if (order.image?.bucket && order.image?.path) {
+        try {
+          const url = await getImageUrl(order.image.bucket, order.image.path);
+          if (!cancelled) setResolvedImageUrl(url || null);
+        } catch {
+          if (!cancelled) setResolvedImageUrl(null);
+        }
+      } else {
+        setResolvedImageUrl(null);
+      }
+
+      const resolved = await Promise.all(
+        sourceMedia.map(async (media) => {
+          try {
+            const url = await getImageUrl(media.bucket, media.path);
+            return { ...media, url: url || null };
+          } catch {
+            return { ...media, url: null };
+          }
+        }),
+      );
+
+      if (!cancelled) {
+        setResolvedMedia(resolved);
+      }
+    };
+
+    void resolveMedia();
 
     return () => {
       cancelled = true;
     };
   }, [order, isOpen]);
+
+  const displayMedia = resolvedMedia.length > 1 ? resolvedMedia : fallbackMedia;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -115,21 +197,110 @@ export function OrderDetailsModal({ orderId, isOpen, onClose }: OrderDetailsModa
             </div>
 
             {/* Imagen */}
-            {resolvedImageUrl && (
-              <div className="relative w-full aspect-video bg-gray-100 rounded-lg overflow-hidden">
-                <Image
-                  src={resolvedImageUrl}
-                  alt={order.title}
-                  fill
-                  unoptimized
-                  className="object-cover"
-                  priority
-                  onError={(e) => {
-                    // Fallback si la imagen falla
-                    const img = e.target as HTMLImageElement;
-                    img.style.display = 'none';
-                  }}
-                />
+            {(resolvedMedia.length > 0 || resolvedImageUrl) && (
+              <div className="space-y-3">
+                <div className="relative w-full aspect-video bg-gray-100 rounded-lg overflow-hidden">
+                  {displayMedia.length > 0 && displayMedia[currentMediaIndex]?.url ? (
+                    <>
+                      {displayMedia[currentMediaIndex].mediaKind === 'video' || (displayMedia[currentMediaIndex].mimeType || '').startsWith('video/') ? (
+                        <video
+                          src={displayMedia[currentMediaIndex].url}
+                          controls
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <Image
+                          src={displayMedia[currentMediaIndex].url}
+                          alt={order.title}
+                          fill
+                          unoptimized
+                          className="object-cover"
+                          priority
+                        />
+                      )}
+                    </>
+                  ) : resolvedImageUrl ? (
+                    <Image
+                      src={resolvedImageUrl}
+                      alt={order.title}
+                      fill
+                      unoptimized
+                      className="object-cover"
+                      priority
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
+                      Sin vista previa
+                    </div>
+                  )}
+                  
+                  {displayMedia.length > 1 && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full w-10 h-10 p-0 gap-0"
+                        onClick={() => setCurrentMediaIndex((prev) => (prev - 1 + displayMedia.length) % displayMedia.length)}
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full w-10 h-10 p-0 gap-0"
+                        onClick={() => setCurrentMediaIndex((prev) => (prev + 1) % displayMedia.length)}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                      
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-full bg-black/50 px-3 py-1">
+                        <span className="text-xs text-white font-medium">
+                          {currentMediaIndex + 1} / {displayMedia.length}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {displayMedia.length > 1 && (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                    {displayMedia.map((media, index) => (
+                      <button
+                        key={`${media.bucket}/${media.path}-${index}`}
+                        onClick={() => setCurrentMediaIndex(index)}
+                        className={`relative aspect-square overflow-hidden rounded-lg border-2 transition-colors ${
+                          currentMediaIndex === index ? 'border-primary' : 'border-border/60'
+                        } bg-muted/30`}
+                      >
+                        {media.url ? (
+                          media.mediaKind === 'video' || (media.mimeType || '').startsWith('video/') ? (
+                            <>
+                              <video src={media.url} className="h-full w-full object-cover" />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center">
+                                  <div className="w-0 h-0 border-l-3 border-l-white border-t-2 border-t-transparent border-b-2 border-b-transparent ml-1" />
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <Image
+                              src={media.url}
+                              alt={`${order.title} thumbnail ${index + 1}`}
+                              fill
+                              unoptimized
+                              className="object-cover"
+                            />
+                          )
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                            Sin vista
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -182,26 +353,16 @@ export function OrderDetailsModal({ orderId, isOpen, onClose }: OrderDetailsModa
             </Card>
 
             {/* Parámetros del Pedido */}
-            {order.parameters && (
+            {order.attributes && order.attributes.length > 0 && (
               <Card className="p-4 space-y-3">
                 <h3 className="font-semibold text-sm">Parámetros del Pedido</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Largo (cm)</p>
-                    <p className="text-sm font-medium">{order.parameters.length}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Ancho (cm)</p>
-                    <p className="text-sm font-medium">{order.parameters.width}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Alto (cm)</p>
-                    <p className="text-sm font-medium">{order.parameters.height}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Material</p>
-                    <p className="text-sm font-medium capitalize">{order.parameters.material}</p>
-                  </div>
+                  {order.attributes.map(attr => (
+                    <div key={attr.code}>
+                      <p className="text-xs text-muted-foreground">{attr.label}</p>
+                      <p className="text-sm font-medium capitalize">{attr.value}</p>
+                    </div>
+                  ))}
                 </div>
               </Card>
             )}
@@ -211,6 +372,13 @@ export function OrderDetailsModal({ orderId, isOpen, onClose }: OrderDetailsModa
               <Card className="p-4">
                 <p className="text-xs text-muted-foreground mb-2">Cliente</p>
                 <p className="text-sm font-medium">{order.clientName}</p>
+              </Card>
+            )}
+
+            {order.companyName && (
+              <Card className="p-4">
+                <p className="text-xs text-muted-foreground mb-2">Empresa</p>
+                <p className="text-sm font-medium">{order.companyName}</p>
               </Card>
             )}
 

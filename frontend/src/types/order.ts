@@ -17,10 +17,28 @@ export interface BaseOrder {
     bucket: string;
     path: string;
   };
+  media?: OrderMedia[];
+  productId?: number | null;
+  quantity?: number | null;
+  attributes?: {
+    code: string;
+    label: string;
+    value: string;
+  }[];
 }
 
 export interface AdminOrder extends BaseOrder {
   clientName: string;
+  companyName?: string | null;
   imageUrl?: string | null;
-  productType?: 'bordado' | 'neon-flex' | 'acrilico';
+  productType?: 'bordado' | 'neon-flex' | 'acrilico' | 'vinilo' | 'sublimacion';
+}
+
+export interface OrderMedia {
+  bucket: string;
+  path: string;
+  mediaKind?: string | null;
+  mediaRole?: string | null;
+  mimeType?: string | null;
+  sortOrder?: number | null;
 }

@@ -1,65 +1,162 @@
 "use client";
 
-import { Sparkles, CheckCircle } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { Sparkles, CheckCircle, RotateCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { ProductType } from "@/types/types";
 
 type Props = {
-  selectedVariant: number | null;
-  setSelectedVariant: (variant: number) => void;
+  productType: ProductType | null;
   uploadedImage: string | null;
+  generatedImages: string[];
+  selectedGeneratedImage: string | null;
+  setSelectedGeneratedImage: (image: string | null) => void;
+  generateAIImages: (style: string, reset?: boolean, sourceImageUrl?: string) => void;
+  resetGeneratedImages: () => void;
+  loading: boolean;
+};
+
+const styleForProductType = (productType: ProductType | null) => {
+  switch (productType) {
+    case "bordado":
+      return "bordado";
+    case "neon-flex":
+      return "neon_flex";
+    case "acrilico":
+      return "acrilico";
+    default:
+      return "bordado";
+  }
 };
 
 export default function Step3AIResults({
-  selectedVariant,
-  setSelectedVariant,
+  productType,
   uploadedImage,
+  generatedImages,
+  selectedGeneratedImage,
+  setSelectedGeneratedImage,
+  generateAIImages,
+  resetGeneratedImages,
+  loading,
 }: Props) {
-  const variants = [1, 2, 3];
+  const style = styleForProductType(productType);
+  const autoGenerationRequestedRef = useRef(false);
+  const lastUploadedImageRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!productType) {
+      autoGenerationRequestedRef.current = false;
+      lastUploadedImageRef.current = uploadedImage;
+      return;
+    }
+
+    if (lastUploadedImageRef.current !== uploadedImage) {
+      autoGenerationRequestedRef.current = false;
+      lastUploadedImageRef.current = uploadedImage;
+    }
+
+    if (generatedImages.length > 0) return;
+    if (loading) return;
+    if (autoGenerationRequestedRef.current) return;
+    if (!uploadedImage) return;
+
+    autoGenerationRequestedRef.current = true;
+    generateAIImages(style, false, uploadedImage);
+  }, [productType, uploadedImage, generatedImages.length, generateAIImages, loading, style]);
 
   return (
     <div>
-      <h2 className="text-2xl font-semibold mb-2">
-        Selecciona una variante
-      </h2>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-semibold">Resultados IA</h2>
+          <p className="text-muted-foreground mt-2 max-w-2xl">
+            Elige la versión generada por IA que mejor represente tu diseño. Si no te gusta, puedes generar nuevas variantes hasta 3 opciones.
+          </p>
+        </div>
 
-      <p className="text-muted-foreground mb-6">
-        La IA ha generado estas variantes de tu diseño
-      </p>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {variants.map((variant) => (
-          <div
-            key={variant}
-            onClick={() => setSelectedVariant(variant)}
-            className={`cursor-pointer rounded-lg border-2 overflow-hidden transition-all ${
-              selectedVariant === variant
-                ? "border-accent shadow-lg scale-105"
-                : "border-border hover:border-accent/50"
-            }`}
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button
+            onClick={() => generateAIImages(style, false, uploadedImage || undefined)}
+            disabled={loading || !uploadedImage || generatedImages.length >= 3}
+            className="flex items-center gap-2"
           >
-            <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center relative">
-              {uploadedImage ? (
-                <img
-                  src={uploadedImage}
-                  alt={`Variante ${variant}`}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <Sparkles className="w-12 h-12 text-muted-foreground" />
-              )}
+            <Sparkles className="w-4 h-4" />
+            {generatedImages.length === 0
+              ? "Generar IA"
+              : generatedImages.length < 3
+              ? "Generar otra variante"
+              : "Máximo 3 variantes"}
+          </Button>
 
-              {selectedVariant === variant && (
-                <div className="absolute top-2 right-2 w-8 h-8 bg-accent rounded-full flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 text-white" />
+          {generatedImages.length > 0 && (
+            <Button
+              variant="secondary"
+              onClick={() => resetGeneratedImages()}
+              disabled={loading}
+              className="flex items-center gap-2"
+            >
+              <RotateCw className="w-4 h-4" />
+              Volver a generar
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {generatedImages.length === 0 && !loading ? (
+        <div className="rounded-lg border border-border bg-muted/50 p-8 text-center text-muted-foreground mb-4">
+          <Sparkles className="mx-auto mb-3 h-12 w-12 opacity-70" />
+          <p>Genera tu primera variante IA para continuar.</p>
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        {generatedImages.map((imageUrl, index) => (
+          <Card
+            key={imageUrl}
+            className={`cursor-pointer overflow-hidden transition-all p-0 ${
+              selectedGeneratedImage === imageUrl
+                ? "ring-2 ring-accent shadow-lg"
+                : "border border-border hover:shadow-md"
+            }`}
+            onClick={() => setSelectedGeneratedImage(imageUrl)}
+          >
+            <div className="aspect-square bg-gray-100">
+              <img
+                src={imageUrl}
+                alt={`Variante IA ${index + 1}`}
+                className="h-full w-full object-cover"
+              />
+            </div>
+
+            <div className="p-4 text-center">
+              <p className="font-semibold">Variante {index + 1}</p>
+              {selectedGeneratedImage === imageUrl && (
+                <div className="mt-2 inline-flex items-center gap-1 text-accent">
+                  <CheckCircle className="w-4 h-4" />
+                  <span className="text-sm">Seleccionada</span>
                 </div>
               )}
             </div>
+          </Card>
+        ))}
 
-            <div className="p-4">
-              <p className="font-semibold">Variante {variant}</p>
+        {loading && (
+          <div className="rounded-lg border border-border p-0 overflow-hidden animate-pulse">
+            <div className="aspect-square bg-muted" />
+            <div className="p-4 bg-background">
+              <div className="h-4 w-24 bg-muted rounded mx-auto mb-2" />
+              <div className="h-3 w-16 bg-muted rounded mx-auto" />
             </div>
           </div>
-        ))}
+        )}
       </div>
+
+      {generatedImages.length >= 1 && (
+        <p className="mt-4 text-sm text-muted-foreground">
+          Puedes seleccionar hasta 3 variantes para comparar. Una vez elegida una, haz clic en Siguiente para confirmar.
+        </p>
+      )}
     </div>
   );
 }

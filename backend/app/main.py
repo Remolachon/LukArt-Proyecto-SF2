@@ -1,35 +1,141 @@
-from fastapi import FastAPI
+import logging
+import os
+import re
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-import app.models 
 
+import app.models
 from app.controllers.user_controller import router as user_router
 from app.controllers.auth_controller import router as auth_router
+from app.controllers.admin_controller import router as admin_router
+from app.controllers.company_controller import router as company_router
 from app.controllers import product_controller
 from app.controllers import order_controller
+from app.controllers import interaction_controller
 from app.controllers import upload_controller
+from app.controllers import ai_controller
+from app.controllers.sales_controller import router as sales_router, funcionario_router as sales_funcionario_router
+from app.controllers.staff_controller import router as staff_router
+from app.database.database import check_db_connection
 
-app = FastAPI(title="Embroidery Marketplace API")
+logger = logging.getLogger(__name__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("🚀 Iniciando servidor...")
+    
+    # Verificar conexión a BD
+    db_available = await check_db_connection()
+    if not db_available:
+        logger.warning("⚠️  Advertencia: No se pudo verificar conexión a BD al iniciar")
+    else:
+        logger.info("✅ Conexión a BD verificada")
+    
+    yield
+    
+    # Shutdown
+    logger.info("🛑 Deteniendo servidor...")
+
+app = FastAPI(
+    title="Embroidery Marketplace API",
+    description="API para gestionar marketplace de bordados",
+    lifespan=lifespan
+)
 
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://design-forge-ai-proyecto-software-1-yizbuk3r1.vercel.app",
 ]
+
+frontend_url = os.getenv("FRONTEND_URL")
+if frontend_url:
+    origins.append(frontend_url.rstrip("/"))
+
+extra_origins = os.getenv("CORS_ORIGINS", "")
+if extra_origins:
+    origins.extend([origin.strip().rstrip("/") for origin in extra_origins.split(",") if origin.strip()])
+
+# Deduplicate while preserving order
+origins = list(dict.fromkeys(origins))
+
+allow_origin_regex = os.getenv(
+    "CORS_ORIGIN_REGEX",
+    r"^https://.*\.vercel\.app$",
+)
+
+allowed_origin_pattern = re.compile(allow_origin_regex)
+
+
+def _is_allowed_origin(origin: str | None) -> bool:
+    if not origin:
+        return False
+
+    normalized_origin = origin.rstrip("/")
+    if normalized_origin in origins:
+        return True
+
+    return bool(allowed_origin_pattern.fullmatch(normalized_origin))
+
+
+@app.middleware("http")
+async def explicit_cors_middleware(request: Request, call_next):
+    origin = request.headers.get("origin")
+
+    if request.method == "OPTIONS" and _is_allowed_origin(origin):
+        response = Response(status_code=204)
+    else:
+        response = await call_next(request)
+
+    if _is_allowed_origin(origin):
+        response.headers["Access-Control-Allow-Origin"] = origin.rstrip("/")
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Vary"] = "Origin"
+
+    return response
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  
+    allow_origins=origins,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# RUTAS
 app.include_router(user_router)
 app.include_router(auth_router)
+app.include_router(admin_router)
+app.include_router(company_router)
 app.include_router(product_controller.router)
 app.include_router(order_controller.router)
+app.include_router(interaction_controller.router)
 app.include_router(upload_controller.router)
+app.include_router(ai_controller.router)
+app.include_router(sales_router)
+app.include_router(sales_funcionario_router)
+app.include_router(staff_router)
+
 
 @app.get("/")
 def root():
+    return {"message": "Bienvenido a Embroidery Marketplace API"}
+
+
+@app.get("/health")
+async def health_check():
+    """
+    Endpoint para verificar salud de la aplicación.
+    Incluye estado de la conexión a BD.
+    """
+    db_available = await check_db_connection()
+    
+    return {
+        "status": "healthy" if db_available else "degraded",
+        "database": "connected" if db_available else "disconnected",
+    }
     return {"message": "API running"}

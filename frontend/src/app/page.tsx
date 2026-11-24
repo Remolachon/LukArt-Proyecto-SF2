@@ -1,14 +1,16 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/buttonMayus";
 import Header from "@/components/Header";
 import { getPublicImageUrl } from "@/lib/supabase/getPublicImageUrl";
 import { HOME_CATALOG_PRODUCTS } from "@/constants/productCatalog";
 import { InfiniteGrid } from "@/components/ui/infinite-grid";
 import { Magnetic } from "@/components/core/magnetic";
+import { Tilt } from "@/components/core/tilt";
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background text-foreground">
       <Header />
 
       {/* Hero Section */}
@@ -58,17 +60,17 @@ export default function Landing() {
       <section className="py-20 px-4 bg-primary text-white">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl font-semibold mb-6">
-            ¿Listo para crear algo increíble?
+            ¿Quieres vender tus productos con nosotros?
           </h2>
           <p className="text-xl mb-8 opacity-90">
-            Únete a cientos de clientes satisfechos que ya han creado productos únicos
+            Registra tu empresa y empieza a publicar tu catálogo en nuestra plataforma.
           </p>
-          <Link href="/register" className="inline-block relative z-50 mt-8">
+          <Link href="/crear-empresa" className="inline-block relative z-50 mt-8">
             <Magnetic intensityX={0.35} intensityY={0.08} actionArea='global' range={250} springOptions={{ stiffness: 80, damping: 10, mass: 0.5 }}>
               <Button size="lg" className="group relative overflow-hidden bg-accent text-accent-foreground hover:brightness-110 shadow-lg hover:shadow-2xl transition-all duration-500">
                 {/* Shine effect div */}
                 <div className="pointer-events-none absolute top-0 -left-[100%] w-1/2 h-full bg-gradient-to-r from-transparent via-white/40 to-transparent -skew-x-12 group-hover:[animation:shine-sweep_2.5s_ease-in-out_infinite] z-0" />
-                
+
                 <Magnetic intensity={0.06} actionArea='global' range={250} springOptions={{ stiffness: 80, damping: 10, mass: 0.5 }}>
                   <span className="relative z-10">Comenzar ahora</span>
                 </Magnetic>
@@ -96,25 +98,30 @@ function ProductCard({
   const imageUrl = getPublicImageUrl(storagePath);
 
   return (
-    <div className="group relative overflow-hidden rounded-xl bg-white border border-border hover:shadow-lg transition-all duration-300">
-      <div className="aspect-[4/3] overflow-hidden">
-        <img
-          src={imageUrl}
-          alt={title}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-        />
-      </div>
-
-      <div className="p-6">
-        <h3 className="text-xl font-semibold mb-2">{title}</h3>
-        <p className="text-muted-foreground">{description}</p>
-      </div>
-
-      {accent && (
-        <div className="absolute top-4 right-4 px-3 py-1 bg-accent text-accent-foreground rounded-full text-sm font-medium">
-          Popular
+    <Tilt rotationFactor={8} isRevese>
+      <div className="group relative overflow-hidden rounded-xl bg-background border border-border hover:shadow-lg transition-all duration-300 h-full flex flex-col">
+        <div className="relative aspect-[4/3] overflow-hidden">
+          <Image
+            src={imageUrl}
+            alt={title}
+            fill
+            loading="lazy"
+            unoptimized
+            className="object-cover group-hover:scale-105 transition-transform duration-300"
+          />
         </div>
-      )}
-    </div>
+
+        <div className="p-6 flex-1">
+          <h3 className="text-xl font-semibold mb-2">{title}</h3>
+          <p className="text-muted-foreground">{description}</p>
+        </div>
+
+        {accent && (
+          <div className="absolute top-4 right-4 px-3 py-1 bg-accent text-accent-foreground rounded-full text-sm font-medium">
+            Popular
+          </div>
+        )}
+      </div>
+    </Tilt>
   );
 }

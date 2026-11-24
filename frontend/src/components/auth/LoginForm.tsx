@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
 import { getDashboardByRole, login, startGoogleAuth } from "@/services/auth.service";
+import { audioService } from "@/services/audio.service";
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
@@ -20,6 +21,8 @@ export default function LoginForm() {
   const [errorMsg, setErrorMsg] = useState("");
 
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = searchParams.get("next");
 
   useEffect(() => {
     const googleError = localStorage.getItem("google_auth_error");
@@ -60,12 +63,20 @@ export default function LoginForm() {
 
     try {
       const res = await login(email, password);
+      audioService.playLoginBell();
       toast.success("¡Bienvenido de vuelta!");
 
       const redirectPath = localStorage.getItem("redirect_after_login");
 
+      if (nextPath) {
+        localStorage.removeItem("redirect_after_login");
+        router.replace(nextPath);
+        return;
+      }
+
       if (redirectPath) {
         localStorage.removeItem("redirect_after_login");
+        router.replace(getDashboardByRole(res.role));
         router.push(redirectPath);
         return;
       }
@@ -85,6 +96,10 @@ export default function LoginForm() {
     setGoogleLoading(true);
 
     try {
+      if (nextPath) {
+        localStorage.setItem("redirect_after_login", nextPath);
+      }
+
       await startGoogleAuth("login");
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "No se pudo iniciar con Google";
@@ -114,7 +129,7 @@ export default function LoginForm() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="tu@email.com"
             disabled={loading || googleLoading}
-            className="h-11 rounded-xl border-border/70 bg-background/80"
+            className="h-11 rounded-xl"
           />
         </div>
 
@@ -126,7 +141,7 @@ export default function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Introduce tu contraseña"
             disabled={loading || googleLoading}
-            className="h-11 rounded-xl border-border/70 bg-background/80"
+            className="h-11 rounded-xl"
           />
         </div>
 

@@ -1,20 +1,17 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class CreateOrderRequest(BaseModel):
     product_type: str
     image_url: str | None
-    size: str
-    material: str
-    color: str
+    quantity: int = Field(default=1, ge=1, le=10)
+    attributes: dict[str, dict[str, str]] = Field(default_factory=dict)
 
 
 class CreateMarketplaceOrderRequest(BaseModel):
     product_id: int
-    length: int
-    height: int
-    width: int
-    material: str
+    quantity: int = Field(default=1, ge=1, le=10)
+    attributes: dict[str, str] = Field(default_factory=dict)
 
 
 class OrderResponse(BaseModel):
@@ -27,11 +24,19 @@ class DashboardImage(BaseModel):
     path: str
 
 
-class OrderParameters(BaseModel):
-    length: int
-    height: int
-    width: int
-    material: str
+class DashboardMedia(BaseModel):
+    bucket: str
+    path: str
+    mediaKind: str | None = None
+    mediaRole: str | None = None
+    mimeType: str | None = None
+    sortOrder: int | None = None
+
+
+class AttributeResponse(BaseModel):
+    code: str
+    label: str
+    value: str
 
 
 class DashboardOrder(BaseModel):
@@ -43,8 +48,13 @@ class DashboardOrder(BaseModel):
     createdAt: str
     image: DashboardImage
     imageUrl: str | None = None
+    media: list[DashboardMedia] = Field(default_factory=list)
     clientName: str | None = None
+    companyName: str | None = None
+    productId: int | None = None
     productType: str | None = None
+    quantity: int | None = None
+    attributes: list[AttributeResponse] = Field(default_factory=list)
 
 
 class OrderDetailResponse(BaseModel):
@@ -57,10 +67,13 @@ class OrderDetailResponse(BaseModel):
     createdAt: str
     image: DashboardImage
     imageUrl: str | None = None
+    media: list[DashboardMedia] = Field(default_factory=list)
     clientName: str | None = None
+    companyName: str | None = None
+    productId: int | None = None
     productType: str | None = None
     quantity: int
-    parameters: OrderParameters | None = None
+    attributes: list[AttributeResponse] = Field(default_factory=list)
 
 
 class DashboardStats(BaseModel):
